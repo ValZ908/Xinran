@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ranran Photocard Gacha</title>
+<meta name="description" content="Kumpulkan semua photocard Song Xinran (Ranran) SNH48. Mini game fan-made.">
+<style>
+  :root {
+    --bg: #09090b; --panel: #18181b; --line: #ffffff1a; --text: #fafafa; --muted: #a1a1aa;
+    --rose: #fda4af; --amber: #fde68a;
+    --N: #a1a1aa; --R: #7dd3fc; --SR: #c4b5fd; --SSR: #fcd34d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: radial-gradient(ellipse at top, #3f1d2b 0%, var(--bg) 60%) fixed, var(--bg);
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { margin: 0; font-size: clamp(28px, 6vw, 44px); line-height: 1.1; }
+  h1 span { background: linear-gradient(90deg, var(--rose), var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  h2 { font-size: 18px; margin: 0; }
+  .eyebrow { margin: 0 0 8px; color: var(--rose); font-size: 12px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+  .sub { color: var(--muted); margin: 8px 0 0; }
+
+  .progress { margin-top: 20px; height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .progress div { height: 100%; width: 0; background: linear-gradient(90deg, var(--rose), var(--amber)); transition: width .6s; }
+  .stats { display: flex; justify-content: space-between; margin-top: 6px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+  .stage { margin-top: 28px; padding: 24px 16px; border: 1px solid var(--line); border-radius: 24px; background: #18181bcc; text-align: center; }
+  .reveal { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 150px)); justify-content: center; gap: 12px; min-height: 120px; }
+  .empty { grid-column: 1 / -1; align-self: center; color: var(--muted); }
+  .actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+  button { font: inherit; cursor: pointer; }
+  .pull { border: 0; border-radius: 99px; padding: 12px 24px; font-weight: 700; color: #000; background: linear-gradient(90deg, var(--rose), var(--amber)); transition: transform .15s; }
+  .pull:active { transform: scale(.95); }
+  .pull.alt { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .pity { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+
+  /* Photocard */
+  .card { position: relative; aspect-ratio: 55 / 85; perspective: 800px; border: 0; padding: 0; background: none; }
+  .inner { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .reveal .inner { animation: flip .7s cubic-bezier(.2, .8, .3, 1.2) var(--d, 0s) both; }
+  @keyframes flip { from { transform: rotateY(180deg) scale(.8); } to { transform: none; } }
+  .face, .back { position: absolute; inset: 0; border-radius: 12px; overflow: hidden; backface-visibility: hidden; }
+  .face { border: 3px solid var(--c); box-shadow: 0 0 18px -4px var(--c); background: #000; }
+  .face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .back { transform: rotateY(180deg); background: repeating-linear-gradient(45deg, #27272a 0 8px, #1f1f23 8px 16px); border: 3px solid #3f3f46; }
+  .tag { position: absolute; left: 6px; top: 6px; padding: 2px 7px; border-radius: 99px; font-size: 11px; font-weight: 800; color: #000; background: var(--c); }
+  .new { position: absolute; right: 6px; top: 6px; padding: 2px 7px; border-radius: 99px; font-size: 10px; font-weight: 800; background: var(--rose); color: #000; }
+  .name { position: absolute; inset: auto 0 0; padding: 18px 8px 8px; font-size: 12px; font-weight: 600; text-align: left; color: #fff; background: linear-gradient(transparent, #000c); }
+  .count { position: absolute; right: 6px; bottom: 6px; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000; }
+  .N { --c: var(--N); } .R { --c: var(--R); } .SR { --c: var(--SR); } .SSR { --c: var(--SSR); }
+  /* Kilau hologram untuk SSR */
+  .SSR .face::after {
+    content: ""; position: absolute; inset: 0; mix-blend-mode: overlay; background-size: 250% 250%;
+    background-image: linear-gradient(115deg, transparent 30%, #fff9 45%, #f0abfc88 50%, #7dd3fc88 55%, transparent 70%);
+    animation: holo 2.5s linear infinite;
+  }
+  @keyframes holo { from { background-position: 100% 100%; } to { background-position: 0 0; } }
+
+  .book-head { display: flex; justify-content: space-between; align-items: baseline; margin-top: 40px; }
+  .book { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; margin-top: 14px; }
+  .book .card:not(.locked) { cursor: zoom-in; }
+  .locked .face { border-color: #3f3f46; box-shadow: none; }
+  .locked img { filter: grayscale(1) brightness(.12) blur(3px); }
+  .locked .face::before { content: "?"; position: absolute; inset: 0; display: grid; place-items: center; z-index: 1; font-size: 28px; font-weight: 800; color: #52525b; }
+  .locked .face::after { display: none; }
+  .complete { display: none; margin-top: 16px; padding: 14px; border-radius: 16px; text-align: center; font-weight: 700; color: #000; background: linear-gradient(90deg, var(--rose), var(--amber)); }
+  .complete.show { display: block; }
+  .reset { margin-top: 32px; background: none; border: 0; color: var(--muted); font-size: 12px; text-decoration: underline; }
+
+  dialog { border: 0; padding: 0; background: none; max-width: min(360px, 90vw); width: 100%; }
+  dialog::backdrop { background: #000c; backdrop-filter: blur(4px); }
+  dialog .card { width: 100%; }
+  dialog p { text-align: center; color: var(--text); margin: 12px 0 0; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal .inner, .SSR .face::after { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">SNH48 · Song Xinran</p>
+  <h1>Ranran <span>Photocard Gacha</span></h1>
+  <p class="sub">Tarik kartu, kumpulkan semua photocard Ranran. Bisa dapat SSR hologram ✨ · <a href="fanmeet.html" style="color: var(--rose)">Fan Meeting →</a> · <a href="puzzle.html" style="color: var(--rose)">Puzzle Geser →</a> · <a href="platformer.html" style="color: var(--rose)">Super Stage →</a> · <a href="catch.html" style="color: var(--rose)">Lightstick Catch →</a> · <a href="crossing.html" style="color: var(--rose)">Nyebrang Jalan →</a> · <a href="adventure.html" style="color: var(--rose)">Petualangan →</a></p>
+
+  <div class="progress" aria-hidden="true"><div id="bar"></div></div>
+  <div class="stats"><span id="progress-text"></span><span id="pulls-text"></span></div>
+
+  <section class="stage" aria-label="Hasil tarikan">
+    <div id="reveal" class="reveal" aria-live="polite"><p class="empty">Tekan tombol di bawah untuk menarik kartu 💌</p></div>
+    <div class="actions">
+      <button class="pull" data-n="1">Tarik ×1</button>
+      <button class="pull" data-n="5">Tarik ×5</button>
+    </div>
+    <p class="pity" id="pity"></p>
+  </section>
+
+  <div class="book-head"><h2>Koleksi</h2><span class="stats" id="book-count"></span></div>
+  <div class="complete" id="complete">🎉 Koleksi lengkap! Kamu fans sejati Ranran!</div>
+  <div class="book" id="book"></div>
+
+  <button class="reset" id="reset">Reset koleksi</button>
+</main>
+
+<dialog id="viewer"><div id="viewer-body"></div></dialog>
+
+<script src="cards.js"></script>
+<script>
+const ODDS = { SSR: 3, SR: 12, R: 30, N: 55 }; // persen
+const PITY = 40; // SSR dijamin paling lambat di tarikan ke-40
+
+// rand di [0, 1) → rarity sesuai ODDS.
+function rollRarity(rand) {
+  let x = rand * 100;
+  for (const [r, p] of Object.entries(ODDS)) if ((x -= p) < 0) return r;
+  return "N";
+}
+console.assert(Object.values(ODDS).reduce((a, b) => a + b) === 100, "ODDS harus total 100");
+console.assert(rollRarity(0) === "SSR" && rollRarity(0.1) === "SR" && rollRarity(0.99) === "N", "rollRarity salah");
+
+let state = { owned: {}, pulls: 0, sinceSSR: 0 };
+try { state = { ...state, ...JSON.parse(localStorage.getItem(KEY)) }; } catch {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
+
+function pull(n) {
+  const results = [];
+  for (let i = 0; i < n; i++) {
+    const r = state.sinceSSR + 1 >= PITY ? "SSR" : rollRarity(Math.random());
+    state.sinceSSR = r === "SSR" ? 0 : state.sinceSSR + 1;
+    const pool = CARDS.filter((c) => c.r === r);
+    const card = pool[Math.floor(Math.random() * pool.length)];
+    results.push({ card, isNew: !state.owned[card.id] });
+    state.owned[card.id] = (state.owned[card.id] || 0) + 1;
+    state.pulls++;
+  }
+  save();
+  document.getElementById("reveal").innerHTML = results
+    .map(({ card, isNew }, i) => cardHtml(card, { delay: i * 0.18, isNew }))
+    .join("");
+  render();
+}
+
+function cardHtml(card, { delay = 0, isNew = false, count = 0, locked = false } = {}) {
+  const label = locked ? "Kartu belum didapat" : `${card.r} ${card.name}`;
+  return `<button class="card ${card.r}${locked ? " locked" : ""}" data-id="${card.id}" aria-label="${label}"${locked ? " disabled" : ""}>
+    <span class="inner" style="--d:${delay}s">
+      <span class="face">
+        <img src="${card.src}" alt="" loading="lazy">
+        ${locked ? "" : `<span class="tag">${card.r}</span><span class="name">${card.name}</span>`}
+        ${isNew ? `<span class="new">NEW</span>` : ""}
+        ${count > 1 ? `<span class="count">×${count}</span>` : ""}
+      </span>
+      <span class="back"></span>
+    </span>
+  </button>`;
+}
+
+function render() {
+  const got = CARDS.filter((c) => state.owned[c.id]).length;
+  document.getElementById("bar").style.width = `${(got / CARDS.length) * 100}%`;
+  document.getElementById("progress-text").textContent = `${got}/${CARDS.length} kartu`;
+  document.getElementById("pulls-text").textContent = `${state.pulls} tarikan`;
+  document.getElementById("book-count").textContent = `${got}/${CARDS.length}`;
+  document.getElementById("pity").textContent = `SSR dijamin dalam ${PITY - state.sinceSSR} tarikan lagi`;
+  document.getElementById("complete").classList.toggle("show", got === CARDS.length);
+  document.getElementById("book").innerHTML = CARDS
+    .map((c) => cardHtml(c, { count: state.owned[c.id] || 0, locked: !state.owned[c.id] }))
+    .join("");
+}
+
+document.querySelectorAll(".pull").forEach((b) => b.addEventListener("click", () => pull(Number(b.dataset.n))));
+
+const viewer = document.getElementById("viewer");
+document.addEventListener("click", (e) => {
+  if (e.target === viewer) return viewer.close();
+  const el = e.target.closest(".card[data-id]");
+  if (!el || el.disabled || viewer.contains(el)) return;
+  const card = CARDS.find((c) => c.id === el.dataset.id);
+  document.getElementById("viewer-body").innerHTML =
+    cardHtml(card, { count: state.owned[card.id] }) + `<p>${card.name} · dimiliki ×${state.owned[card.id]}</p>`;
+  viewer.showModal();
+});
+
+document.getElementById("reset").addEventListener("click", () => {
+  if (!confirm("Hapus semua koleksi?")) return;
+  state = { owned: {}, pulls: 0, sinceSSR: 0 };
+  save();
+  document.getElementById("reveal").innerHTML = `<p class="empty">Koleksi direset. Mulai lagi! 💌</p>`;
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

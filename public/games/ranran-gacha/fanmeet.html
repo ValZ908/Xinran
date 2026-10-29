@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ranran Fan Meeting</title>
+<meta name="description" content="Simulator fan meeting Song Xinran (Ranran) SNH48. Mini game fan-made, cerita fiksi.">
+<style>
+  :root { --bg: #09090b; --line: #ffffff1a; --text: #fafafa; --muted: #a1a1aa; --rose: #fda4af; --amber: #fde68a; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: radial-gradient(ellipse at top, #3f1d2b 0%, var(--bg) 60%) fixed, var(--bg);
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+  .top { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); }
+  .top a { color: var(--muted); }
+  .hearts { font-variant-numeric: tabular-nums; color: var(--rose); font-weight: 700; }
+  h1 { margin: 12px 0 0; font-size: clamp(24px, 6vw, 34px); }
+  h1 span { background: linear-gradient(90deg, var(--rose), var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  .photo { margin-top: 16px; aspect-ratio: 3 / 4; max-height: 52vh; width: 100%; border-radius: 20px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+  .photo img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; animation: fade .5s; }
+  @keyframes fade { from { opacity: 0; transform: scale(1.03); } }
+
+  .box { margin-top: -40px; position: relative; padding: 16px; border-radius: 20px; border: 1px solid var(--line); background: #18181bf2; backdrop-filter: blur(6px); }
+  .speaker { margin: 0 0 6px; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--rose); }
+  .line { margin: 0; line-height: 1.55; }
+  .narr { color: var(--muted); font-style: italic; }
+  .choices { display: grid; gap: 8px; margin-top: 16px; }
+  button { font: inherit; cursor: pointer; }
+  .choice { text-align: left; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: #27272a; color: var(--text); transition: background .15s, transform .15s; }
+  .choice:hover { background: #3f3f46; }
+  .choice:active { transform: scale(.98); }
+  .primary { border: 0; border-radius: 99px; padding: 12px 22px; font-weight: 700; color: #000; background: linear-gradient(90deg, var(--rose), var(--amber)); text-align: center; }
+  .note { margin-top: 24px; font-size: 12px; color: var(--muted); text-align: center; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) { .photo img { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="index.html">← Gacha</a><span class="hearts" id="hearts" aria-label="Poin kesan"></span></div>
+  <h1>Ranran <span>Fan Meeting</span></h1>
+  <div class="photo"><img id="img" alt=""></div>
+  <section class="box" aria-live="polite">
+    <p class="speaker" id="speaker"></p>
+    <p class="line" id="line"></p>
+    <div class="choices" id="choices"></div>
+  </section>
+  <p class="note">Cerita fiksi buatan fans. Bukan ucapan asli Ranran.</p>
+</main>
+
+<script>
+// p = poin kesan; next = id scene berikutnya, atau "end" untuk ending berdasar total poin.
+const SCENES = {
+  start: {
+    img: "twin-tail", narr: true,
+    text: "Fan meeting “漂亮姐姐的Party”. Setelah antre dua jam, akhirnya giliranmu. Ranran tersenyum dari balik meja tanda tangan…",
+    choices: [
+      { t: "“Ni hao Ranran! Aku datang jauh-jauh dari Indonesia 🇮🇩”", p: 2, next: "hello" },
+      { t: "(Diam membeku karena terlalu gugup)", p: 1, next: "nervous" },
+      { t: "“Boleh minta nomor WhatsApp-mu?”", p: -2, next: "boundary" },
+    ],
+  },
+  hello: {
+    img: "campus-idol",
+    text: "Indonesia?! Waaah, jauh sekali! Terima kasih sudah datang ya~ Terbang berapa jam?",
+    choices: [
+      { t: "“Tujuh jam, tapi demi kamu nggak terasa!”", p: 1, next: "gift" },
+      { t: "“Lumayan capek, tapi lihat kamu langsung hilang capeknya”", p: 1, next: "gift" },
+    ],
+  },
+  nervous: {
+    img: "rose-silk",
+    text: "Hehe, tidak apa-apa~ Tarik napas dulu pelan-pelan. Aku nggak ke mana-mana kok.",
+    choices: [
+      { t: "“M-maaf! Aku fans dari Indonesia!”", p: 1, next: "gift" },
+      { t: "“Kamu… cantik banget aslinya.”", p: 1, next: "gift" },
+    ],
+  },
+  boundary: {
+    img: "gallery-8",
+    text: "Hmm… maaf ya, itu tidak boleh 🙏 Tapi aku tetap senang kamu datang hari ini.",
+    choices: [
+      { t: "“Maaf, aku kelewatan. Senang bisa ketemu kamu.”", p: 1, next: "gift" },
+      { t: "“Ayolah, sekali aja, nggak ada yang lihat.”", p: -2, next: "staff" },
+    ],
+  },
+  staff: {
+    img: "airport", narr: true, ending: true,
+    text: "Seorang staf menepuk bahumu dan mengantarmu keluar antrean. Ranran melambaikan tangan dengan canggung. Ending: Diantar Staf 🚪 Ingat ya, hormati batasan idol!",
+  },
+  gift: {
+    img: "white-rose",
+    text: "Eh, kamu bawa sesuatu untukku?",
+    choices: [
+      { t: "Surat tulisan tangan dan setangkai mawar putih", p: 2, next: "song" },
+      { t: "Sekotak snack khas Indonesia", p: 2, next: "song" },
+      { t: "“Aduh… aku lupa bawa apa-apa.”", p: 0, next: "song" },
+    ],
+  },
+  song: {
+    img: "golden-stage",
+    text: "Terima kasih banyak! Ngomong-ngomong, penampilan mana yang paling kamu suka di tur ini?",
+    choices: [
+      { t: "“Waktu kamu keluar pakai sayap emas itu, merinding!”", p: 2, next: "last" },
+      { t: "“Semuanya! Aku putar ulang tiap hari.”", p: 1, next: "last" },
+      { t: "“Sebenarnya aku ke sini nemenin teman…”", p: -1, next: "last" },
+    ],
+  },
+  last: {
+    img: "gallery-2",
+    text: "Ah, waktunya hampir habis… Ada pesan terakhir untukku?",
+    choices: [
+      { t: "“Jaga kesehatan ya, jangan terlalu capek.”", p: 2, next: "end" },
+      { t: "“Semoga tur 2026-mu sukses besar!”", p: 2, next: "end" },
+      { t: "“Boleh peluk?”", p: -1, next: "end" },
+    ],
+  },
+};
+const ENDINGS = [
+  { min: 7, img: "golden-wings", text: "Ranran menulis namamu di tanda tangan dan menambahkan gambar hati kecil. “Sampai jumpa di Indonesia ya!” Ending: Fans Sejati 👑" },
+  { min: 4, img: "gallery-6", text: "Ranran tersenyum dan melambaikan tangan. “Terima kasih sudah datang~” Hari yang menyenangkan! Ending: Kenangan Manis 💗" },
+  { min: -99, img: "city-lights", text: "Ranran tetap tersenyum sopan, tapi suasananya agak canggung. Mungkin lain kali lebih santai ya. Ending: Agak Canggung 😅" },
+];
+const MAX = 9; // jalur terbaik: 2 + 1 + 2 + 2 + 2
+
+// Self-check: semua "next" mengarah ke scene yang ada.
+for (const s of Object.values(SCENES))
+  for (const c of s.choices || []) console.assert(c.next === "end" || SCENES[c.next], `scene "${c.next}" tidak ada`);
+
+let score = 0;
+const $ = (id) => document.getElementById(id);
+
+function show(id) {
+  let scene = SCENES[id];
+  if (id === "end") scene = { ...ENDINGS.find((e) => score >= e.min), narr: true, ending: true };
+  $("img").src = `images/${scene.img}.jpg`;
+  $("speaker").textContent = scene.narr ? "Narasi" : "Ranran";
+  $("line").textContent = scene.text;
+  $("line").classList.toggle("narr", !!scene.narr);
+  $("hearts").textContent = `❤ ${Math.max(score, 0)}/${MAX}`;
+  const box = $("choices");
+  box.replaceChildren();
+  if (scene.ending) {
+    const again = document.createElement("button");
+    again.className = "primary";
+    again.textContent = "Main lagi";
+    again.onclick = () => { score = 0; show("start"); };
+    const gacha = document.createElement("a");
+    gacha.className = "choice";
+    gacha.href = "index.html";
+    gacha.textContent = "Kembali ke Gacha";
+    gacha.style.textAlign = "center";
+    gacha.style.textDecoration = "none";
+    box.append(again, gacha);
+  } else {
+    for (const c of scene.choices) {
+      const b = document.createElement("button");
+      b.className = "choice";
+      b.textContent = c.t;
+      b.onclick = () => { score += c.p; show(c.next); };
+      box.append(b);
+    }
+  }
+  box.querySelector("button, a").focus({ preventScroll: true });
+}
+
+show("start");
+</script>
+</body>
+</html>

@@ -49,6 +49,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       // Ekstensi browser (mis. QuillBot) menambah atribut ke <html> sebelum React jalan.
       suppressHydrationWarning
     >
+      <head>
+        {/* Pasang tema tersimpan sebelum halaman tampil, supaya tidak berkedip */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("theme")==="pink")document.documentElement.dataset.theme="pink"}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

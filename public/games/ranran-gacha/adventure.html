@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ranran Petualangan</title>
+<meta name="description" content="Game petualangan 2D top-down dengan Ranran (Song Xinran). Mini game fan-made, cerita fiksi.">
+<style>
+  :root { --bg: #09090b; --line: #ffffff1a; --text: #fafafa; --muted: #a1a1aa; --rose: #fda4af; --amber: #fde68a; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: radial-gradient(ellipse at top, #3f1d2b 0%, var(--bg) 60%) fixed, var(--bg);
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  .top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .top a { color: var(--muted); }
+  h1 { margin: 12px 0 16px; font-size: clamp(24px, 6vw, 34px); }
+  h1 span { background: linear-gradient(90deg, var(--rose), var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  canvas { display: block; width: 100%; aspect-ratio: 256 / 144; border-radius: 12px; border: 1px solid var(--line); background: #000; touch-action: none; }
+  .pad { display: grid; grid-template-columns: repeat(3, 56px) 1fr 72px 72px; grid-template-rows: repeat(3, 48px); gap: 6px; margin-top: 12px; user-select: none; -webkit-user-select: none; }
+  .pad button { font-size: 20px; border-radius: 12px; border: 1px solid var(--line); background: #27272a; color: var(--text); touch-action: none; }
+  .pad [data-k=up] { grid-area: 1 / 2; } .pad [data-k=left] { grid-area: 2 / 1; }
+  .pad [data-k=right] { grid-area: 2 / 3; } .pad [data-k=down] { grid-area: 3 / 2; }
+  .pad [data-k=run] { grid-area: 2 / 5; border-radius: 50%; height: 64px; align-self: center; font-size: 14px; font-weight: 700; }
+  .pad [data-k=a] { grid-area: 2 / 6; border-radius: 50%; height: 72px; align-self: center; background: linear-gradient(90deg, var(--rose), var(--amber)); color: #000; border: 0; font-weight: 700; }
+  .pad button:active { filter: brightness(1.3); }
+  @media (pointer: fine) { .pad { display: none; } }
+  .hint { margin-top: 12px; font-size: 12px; color: var(--muted); text-align: center; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="index.html">← Gacha</a><a href="catch.html">Lightstick Catch →</a></div>
+  <h1>Ranran <span>Petualangan</span></h1>
+  <canvas id="game" tabindex="0" aria-label="Game petualangan. Panah atau WASD untuk jalan, spasi atau Z untuk bicara."></canvas>
+  <div class="pad">
+    <button data-k="up" aria-label="Atas">▲</button>
+    <button data-k="left" aria-label="Kiri">◀</button>
+    <button data-k="right" aria-label="Kanan">▶</button>
+    <button data-k="down" aria-label="Bawah">▼</button>
+    <button data-k="run" aria-label="Lari (tahan)">Lari</button>
+    <button data-k="a" aria-label="Aksi">A</button>
+  </div>
+  <p class="hint">← ↑ → ↓ / WASD jalan · tahan Shift / X lari (stamina habis = Ranran kecapekan, diam beberapa detik) · Spasi / Z bicara &amp; lanjut · Temukan 6 barang konser yang hilang di seluruh kota, hindari Gloomy, lalu naik ke panggung!</p>
+</main>
+
+<script>
+const TS = 16, VW = 256, VH = 144;
+const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+const FONT = '"Segoe UI", system-ui, sans-serif';
+
+// Kanvas digambar seresolusi layar (bukan 256×144 lalu ditarik) supaya teks & foto tajam;
+// semua koordinat game tetap dalam satuan 256×144 lewat setTransform.
+let S = 1;
+function resize() {
+  S = Math.max(1, Math.round(cv.clientWidth * devicePixelRatio / VW));
+  cv.width = VW * S; cv.height = VH * S;
+  ctx.imageSmoothingEnabled = false;
+}
+addEventListener("resize", resize);
+resize();
+
+// ---------- Sprite pixel art (1 huruf = 1 piksel), Ranran sama dengan Super Stage ----------
+const PAL = {
+  h: "#4a2318", H: "#8a4a32", s: "#ffe2d4", e: "#1c1917", l: "#e11d48", b: "#fda4af",
+  w: "#fafafa", t: "#18181b", k: "#52525b", d: "#18181b", p: "#7c3aed", W: "#ffffff",
+  y: "#fde68a", g: "#a1a1aa", r: "#fb7185",
+};
+function sprite(rows, pal = PAL) {
+  const c = document.createElement("canvas");
+  c.width = rows[0].length; c.height = rows.length;
+  const x = c.getContext("2d");
+  rows.forEach((r, j) => [...r].forEach((ch, i) => { if (pal[ch]) { x.fillStyle = pal[ch]; x.fillRect(i, j, 1, 1); } }));
+  return c;
+}
+const BODY = [
+  "...hhhhhh...", "..hHHhhhhh..", ".hhhhhhhhhh.", "hhhhhhhhhhhh", "hhsssssssshh", "hhsesssseshh",
+  "hhsbssssbshh", "hhsssllssshh", "hhhwwttwwhhh", "hhwwwttwwwhh", "hswwwttwwwsh", ".swwwttwwws.",
+  "..kkkkkkkk..", "..kkkkkkkk..",
+];
+const STAND = [...BODY, "...ss..ss...", "...dd..dd..."], STEP = [...BODY, "..ss....ss..", "..dd....dd.."];
+const RAN_A = sprite(STAND), RAN_B = sprite(STEP);
+const person = over => sprite(STAND, { ...PAL, ...over });
+const GLOOMY = sprite([".pppppp.", "pWtppWtp", "pppppppp", "ppttttpp", "pppppppp", ".pp..pp."]);
+const ITEM_IMG = {
+  mic: sprite([".kkk.", "kgggk", "kgggk", ".kkk.", "..g..", "..g..", "..g..", ".ggg."]),
+  stick: sprite([".yy.", "yWWy", "yWWy", ".yy.", ".gg.", ".gg.", ".gg.", ".gg."]),
+  ribbon: sprite(["r....r", "rr..rr", "rrllrr", "rr..rr", "r....r"]),
+  shoe: sprite([".ww...", ".ww...", ".wwww.", "llllll"]),
+  dress: sprite([".b..b.", ".bbbb.", "..bb..", ".bbbb.", "bbbbbb", "bbbbbb"]),
+  setlist: sprite(["WWWWW", "WeeeW", "WWWWW", "WeeWW", "WWWWW", "WeeeW", "WWWWW"]),
+};
+
+const photo = new Image();
+photo.src = "images/campus-idol.jpg";
+const drawPhoto = (x, y, w, h) => {
+  if (!photo.naturalWidth) return;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(photo, 248, 90, 245, 280, x, y, w, h);
+  ctx.imageSmoothingEnabled = false;
+};
+
+// ---------- Peta 48×40 ----------
+// . rumput  f bunga  , jalan  P plaza  s pasir  T pohon  b semak  x pagar  p palem
+// ~ air  = jembatan/dermaga  F air mancur  r atap  # dinding  d pintu  S panggung
+const MW = 48, MH = 40;
+const M = Array.from({ length: MH }, (_, y) => Array.from({ length: MW }, (_, x) => (x === 0 || y === 0 || x === MW - 1 || y === MH - 1 ? "T" : ".")));
+const rect = (x0, y0, x1, y1, ch) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) M[y][x] = ch; };
+const house = (x, y) => { rect(x, y, x + 3, y, "r"); rect(x, y + 1, x + 3, y + 2, "#"); M[y + 2][x + 1] = "d"; rect(x + 1, y + 3, x + 1, 21, ","); };
+
+// Hutan labirin (barat laut)
+rect(1, 1, 14, 11, "T");
+rect(8, 7, 8, 11, "."); rect(3, 7, 8, 7, "."); rect(3, 2, 3, 7, "."); rect(3, 2, 12, 2, ".");
+rect(12, 2, 12, 9, "."); rect(3, 4, 10, 4, "."); M[4][10] = "f";
+// Kantong semak di utara
+rect(15, 3, 21, 3, "b"); rect(15, 1, 15, 2, "b"); rect(21, 1, 21, 2, "b"); M[3][18] = ".";
+// Plaza & panggung (timur laut)
+rect(28, 5, 46, 10, "P"); rect(34, 1, 43, 4, "S"); rect(36, 7, 37, 8, "F");
+// Jalan utama
+rect(15, 5, 27, 6, ","); rect(23, 5, 24, 30, ","); rect(3, 22, 44, 23, ",");
+// Sungai + 3 jembatan
+rect(1, 12, 46, 13, "~"); rect(8, 12, 8, 13, "="); rect(23, 12, 24, 13, "="); rect(40, 12, 40, 13, "=");
+// Kota
+house(3, 16); house(9, 16); house(15, 16); house(27, 16); house(31, 16);
+// Taman berpagar + kolam (timur)
+rect(35, 14, 46, 14, "x"); rect(35, 14, 35, 21, "x"); rect(35, 21, 46, 21, "x");
+M[14][40] = "."; M[18][35] = "."; M[21][40] = ".";
+rect(39, 16, 43, 18, "~");
+// Toko
+rect(27, 25, 31, 25, "r"); rect(27, 26, 31, 27, "#"); M[27][29] = "d";
+// Kebun bunga (barat daya)
+rect(2, 25, 18, 29, "f"); rect(6, 26, 6, 28, "b"); rect(13, 25, 13, 27, "b");
+rect(38, 26, 39, 27, "T");
+// Pantai, laut & dermaga (selatan)
+rect(1, 31, 46, 34, "s"); rect(1, 35, 46, 38, "~"); rect(30, 35, 31, 37, "=");
+for (const [x, y] of [[5, 32], [12, 33], [20, 32], [40, 33], [44, 31]]) M[y][x] = "p";
+const MAP = M.map(r => r.join(""));
+
+const tile = (tx, ty) => (MAP[ty] && MAP[ty][tx]) || "T";
+const SOLID = "T~r#dbxpF";
+const solidAt = (x, y) => SOLID.includes(tile(Math.floor(x / TS), Math.floor(y / TS)));
+const free = (x, y, w, h) => !(solidAt(x, y) || solidAt(x + w - 1, y) || solidAt(x, y + h - 1) || solidAt(x + w - 1, y + h - 1));
+
+// ---------- Cerita ----------
+const ITEMS_DEF = [
+  { id: "mic", name: "Mikrofon", tx: 17, ty: 29 },
+  { id: "stick", name: "Lightstick", tx: 45, ty: 17 },
+  { id: "ribbon", name: "Pita Rambut", tx: 16, ty: 1 },
+  { id: "shoe", name: "Sepatu Panggung", tx: 4, ty: 14 },
+  { id: "dress", name: "Kostum", tx: 30, ty: 37 },
+  { id: "setlist", name: "Setlist", tx: 12, ty: 9 },
+];
+const ALL = ITEMS_DEF.length;
+const NPCS = [
+  { name: "Manajer", tx: 5, ty: 19, img: person({ h: "#27272a", H: "#52525b", w: "#1e3a8a", t: "#1e40af", k: "#1e3a8a" }),
+    say: n => n === ALL ? ["Semua lengkap! Cepat ke panggung di timur laut, lewat jembatan tengah!"]
+      : ["Ranran! Konser mulai malam ini!", "Mikrofon, lightstick, pita rambut, sepatu, kostum, sampai setlist... semuanya hilang!", "Tanya-tanya warga kota, pasti ada yang lihat. Hati-hati sama Gloomy ungu ya!"] },
+  { name: "Fans", tx: 20, ty: 21, img: person({ h: "#a16207", H: "#ca8a04", w: "#fda4af", t: "#e11d48" }),
+    say: n => n === ALL ? ["Aku sudah siap nonton! Ranran semangat!!"]
+      : ["Kyaa, Ranran!! Aku fans beratmu!", "Tadi aku lihat pita pink tersangkut di kantong semak-semak utara, dekat jalan ke plaza."] },
+  { name: "Nenek", tx: 10, ty: 27, img: person({ h: "#d4d4d8", H: "#fafafa", w: "#86efac", t: "#15803d", k: "#166534" }),
+    say: () => ["Aduh, cucu Ranran, sini-sini.", "Nenek lihat mikrofon di ujung timur kebun bunga ini.", "Oh, sepatu juga ada di belakang rumah-rumah, dekat sungai."] },
+  { name: "Penjual", tx: 29, ty: 24, img: person({ h: "#57534e", w: "#fef3c7", t: "#b45309", k: "#78350f" }),
+    say: () => ["Selamat datang! Mau beli camilan sebelum konser?", "Lightstick? Kayaknya ada yang jatuh di taman timur, di balik kolam."] },
+  { name: "Nelayan", tx: 32, ty: 34, img: person({ h: "#1c1917", w: "#7dd3fc", t: "#0369a1", k: "#0c4a6e" }),
+    say: () => ["Ombak tenang hari ini.", "Eh, ada kain pink berkilau tersangkut di ujung dermaga. Punyamu?"] },
+  { name: "Teman SNH48", tx: 30, ty: 8, img: person({ h: "#18181b", H: "#3f3f46", w: "#c4b5fd", t: "#7c3aed", k: "#7c3aed" }),
+    say: n => n === ALL ? ["Ayo naik panggung bareng!"]
+      : ["Ranran, sudah ketemu " + n + " dari " + ALL + " barang?", "Setlist-nya tadi terbang ke hutan barat laut. Hutannya kayak labirin, masuk dari jembatan barat."] },
+  { name: "Staf", tx: 33, ty: 3, img: person({ h: "#44403c", w: "#18181b", t: "#fde68a", k: "#18181b" }),
+    say: n => n === ALL ? ["Silakan naik ke panggung!"] : ["Maaf, naik panggung kalau perlengkapan sudah lengkap ya. Baru " + n + " dari " + ALL + "."] },
+];
+const STAF = NPCS.find(n => n.name === "Staf");
+
+// ---------- State ----------
+let state = "title", p, hearts, stamina, tired, inv, items, gloomies, dlg, onStage, toast;
+function reset() {
+  p = { x: 4 * TS + 2, y: 20 * TS, face: 1, walk: 0 };
+  hearts = 3; stamina = 1; tired = 0; inv = 0; onStage = false; toast = null;
+  items = ITEMS_DEF.map(d => ({ ...d, got: false }));
+  gloomies = [[19, 8], [32, 9], [42, 8], [20, 27], [37, 19], [42, 28], [15, 32], [38, 32]]
+    .map(([tx, ty]) => ({ x: tx * TS + 4, y: ty * TS + 5, dx: 1, dy: 0, t: 0 }));
+  state = "play";
+  dlg = { name: "Manajer", lines: NPCS[0].say(0), i: 0 };
+}
+const found = () => items.filter(i => i.got).length;
+
+// ---------- Input ----------
+const keys = {};
+const DIR = { ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down", ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right", ShiftLeft: "run", ShiftRight: "run", KeyX: "run" };
+addEventListener("keydown", e => {
+  if (DIR[e.code]) { keys[DIR[e.code]] = true; e.preventDefault(); }
+  if (["Space", "KeyZ", "Enter"].includes(e.code)) { e.preventDefault(); if (!e.repeat) action(); }
+});
+addEventListener("keyup", e => { if (DIR[e.code]) keys[DIR[e.code]] = false; });
+document.querySelectorAll(".pad button").forEach(b => {
+  const k = b.dataset.k;
+  b.addEventListener("pointerdown", e => { e.preventDefault(); if (k === "a") action(); else keys[k] = true; });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, () => { keys[k] = false; });
+});
+cv.addEventListener("pointerdown", () => { if (state !== "play" || dlg) action(); });
+
+function action() {
+  if (state !== "play") return reset();
+  if (dlg) { if (++dlg.i >= dlg.lines.length) dlg = null; return; }
+  const n = nearNpc();
+  if (n) dlg = { name: n.name, lines: n.say(found()), i: 0 };
+}
+const center = () => [p.x + 6, p.y + 12];
+function nearNpc() {
+  const [cx, cy] = center();
+  return NPCS.find(n => Math.hypot(n.tx * TS + 8 - cx, n.ty * TS + 8 - cy) < 22);
+}
+
+// ---------- Logic ----------
+function update(dt) {
+  if (toast && (toast.life -= dt) <= 0) toast = null;
+  if (dlg) return;
+  inv = Math.max(0, inv - dt);
+
+  // Gerak per sumbu supaya bisa menyusur dinding; kotak tabrakan = kaki (8×7)
+  // Lari menguras stamina ~3 detik; kalau habis Ranran kecapekan dan tidak bisa gerak 2,5 detik
+  tired = Math.max(0, tired - dt);
+  let mx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0), my = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+  if (tired) mx = my = 0;
+  const running = keys.run && (mx || my);
+  if (running) {
+    stamina -= dt / 3;
+    if (stamina <= 0) { stamina = 0; tired = 2.5; toast = { txt: "Ranran kecapekan... hah, hah", life: 2.5 }; }
+  } else stamina = Math.min(1, stamina + dt / (tired ? 5 : 2.5));
+  const sp = (running ? 105 : 60) * dt;
+  if (mx) p.face = mx;
+  if (mx && free(p.x + 2 + mx * sp, p.y + 9, 8, 7)) p.x += mx * sp;
+  if (my && free(p.x + 2, p.y + 9 + my * sp, 8, 7)) p.y += my * sp;
+  p.walk = mx || my ? p.walk + dt * (running ? 1.8 : 1) : 0;
+
+  const [cx, cy] = center();
+  for (const it of items) {
+    if (!it.got && Math.hypot(it.tx * TS + 8 - cx, it.ty * TS + 8 - cy) < 11) {
+      it.got = true;
+      toast = { txt: it.name + " ketemu! (" + found() + "/" + ALL + ")", life: 2 };
+    }
+  }
+
+  for (const g of gloomies) {
+    g.t -= dt;
+    const nx = g.x + g.dx * 30 * dt, ny = g.y + g.dy * 30 * dt;
+    if (g.t <= 0 || !free(nx, ny, 8, 6)) {
+      [g.dx, g.dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][(Math.random() * 4) | 0];
+      g.t = 1 + Math.random() * 2;
+    } else { g.x = nx; g.y = ny; }
+    if (inv === 0 && g.x < p.x + 10 && p.x + 2 < g.x + 8 && g.y < p.y + 16 && p.y + 4 < g.y + 6) {
+      hearts--; inv = 1.2;
+      const kx = Math.sign(p.x + 6 - g.x - 4) * 12, ky = Math.sign(p.y + 12 - g.y - 3) * 12;
+      if (free(p.x + 2 + kx, p.y + 9, 8, 7)) p.x += kx;
+      if (free(p.x + 2, p.y + 9 + ky, 8, 7)) p.y += ky;
+      if (hearts <= 0) state = "over";
+    }
+  }
+
+  const stage = tile(Math.floor(cx / TS), Math.floor((p.y + 14) / TS)) === "S";
+  if (stage && !onStage) {
+    if (found() === ALL) state = "win";
+    else dlg = { name: "Staf", lines: STAF.say(found()), i: 0 };
+  }
+  onStage = stage;
+}
+
+// ---------- Render ----------
+function drawTile(ch, x, y, tx, ty, now) {
+  const fill = (c, ax, ay, w, h) => { ctx.fillStyle = c; ctx.fillRect(x + ax, y + ay, w, h); };
+  if ("sp".includes(ch)) { fill("#fcd9a0", 0, 0, TS, TS); fill("#f5c77e", (tx * 5) % 12 + 2, (ty * 7) % 12 + 2, 1, 1); }
+  else if ("PF".includes(ch)) { fill("#d4d4d8", 0, 0, TS, TS); fill("#a1a1aa", 0, 15, TS, 1); fill("#a1a1aa", 15, 0, 1, TS); }
+  else fill((tx + ty) % 2 ? "#4d7c0f" : "#4f8210", 0, 0, TS, TS);
+
+  if (ch === "f") {
+    fill("#fda4af", 4, 5, 2, 2); fill("#fda4af", 10, 10, 2, 2); fill("#fde68a", 11, 4, 2, 2);
+  } else if (ch === ",") {
+    fill("#d6b48a", 0, 0, TS, TS); fill("#c4a07a", 3, 4, 2, 1); fill("#c4a07a", 10, 11, 2, 1);
+  } else if (ch === "T") {
+    fill("#78350f", 6, 10, 4, 6); fill("#166534", 2, 1, 12, 10); fill("#22c55e", 4, 3, 3, 2);
+  } else if (ch === "b") {
+    fill("#15803d", 1, 4, 14, 11); fill("#15803d", 3, 2, 10, 2); fill("#4ade80", 4, 5, 2, 2); fill("#4ade80", 10, 8, 2, 2);
+  } else if (ch === "x") {
+    fill("#92400e", 2, 3, 3, 12); fill("#92400e", 11, 3, 3, 12); fill("#b45309", 0, 6, TS, 2); fill("#b45309", 0, 11, TS, 2);
+  } else if (ch === "p") {
+    fill("#a16207", 7, 6, 3, 10); fill("#15803d", 1, 2, 15, 3); fill("#15803d", 5, 0, 7, 7); fill("#78350f", 6, 5, 2, 2);
+  } else if (ch === "~" || ch === "=") {
+    fill("#1d4ed8", 0, 0, TS, TS);
+    fill("#60a5fa", (now / 200 + tx * 3) % 12, 5 + (ty % 2) * 6, 4, 1);
+    if (ch === "=") { fill("#92400e", 1, 0, 14, TS); for (let i = 0; i < 4; i++) fill("#78350f", 1, i * 4 + 3, 14, 1); }
+  } else if (ch === "F") {
+    fill("#93c5fd", 0, 0, TS, TS); fill("#3b82f6", 2, 2, 12, 12);
+    fill("#ffffff", 7, 2 + (((now / 150) | 0) % 6), 2, 2);
+  } else if (ch === "r") {
+    fill("#be123c", 0, 0, TS, TS); fill("#9f1239", 0, 5, TS, 1); fill("#9f1239", 0, 11, TS, 1);
+  } else if (ch === "#" || ch === "d") {
+    fill("#fef3c7", 0, 0, TS, TS);
+    if (ch === "d") fill("#78350f", 4, 3, 8, 13); else fill("#7dd3fc", 4, 4, 8, 6);
+  } else if (ch === "S") {
+    fill("#18181b", 0, 0, TS, TS);
+    if (ty === 4) fill("#fda4af", 0, 15, TS, 1);
+    if (ty === 1 && tx % 2) { ctx.fillStyle = `rgba(253,230,138,${0.5 + 0.5 * Math.sin(now / 300 + tx)})`; ctx.fillRect(x + 6, y + 1, 4, 3); }
+  }
+}
+function text(s, x, y, size = 8, color = "#fafafa", align = "center", weight = 700) {
+  ctx.font = `${weight} ${size}px ${FONT}`; ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(s, x, y);
+}
+function wrap(s, maxW) {
+  const out = []; let line = "";
+  for (const w of s.split(" ")) {
+    const t = line ? line + " " + w : w;
+    if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t;
+  }
+  return [...out, line];
+}
+function drawSprite(img, x, y, flip) {
+  if (!flip) return ctx.drawImage(img, x, y);
+  ctx.save(); ctx.translate(x + img.width, y); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore();
+}
+function screen(title, color, lines) {
+  ctx.fillStyle = "rgba(9,9,11,.88)"; ctx.fillRect(0, 0, VW, VH);
+  text(title, VW / 2, 24, 12, color);
+  lines.forEach((l, i) => text(l, VW / 2, 118 + i * 11, 7, i ? "#a1a1aa" : "#fafafa", "center", i ? 400 : 700));
+}
+
+function draw(now) {
+  ctx.setTransform(S, 0, 0, S, 0, 0);
+  if (state === "title") {
+    ctx.fillStyle = "#1e0b16"; ctx.fillRect(0, 0, VW, VH);
+    drawPhoto(VW / 2 - 24, 10, 48, 55);
+    text("RANRAN", VW / 2, 82, 15, "#fda4af");
+    text("PETUALANGAN", VW / 2, 96, 9, "#fde68a");
+    text("Cari 6 barang konser di seluruh kota", VW / 2, 115, 7, "#a1a1aa", "center", 400);
+    text("Spasi / ketuk untuk mulai", VW / 2, 128, 7, "#fafafa");
+    return;
+  }
+  const camX = Math.round(Math.max(0, Math.min(MW * TS - VW, p.x + 6 - VW / 2)));
+  const camY = Math.round(Math.max(0, Math.min(MH * TS - VH, p.y + 8 - VH / 2)));
+  for (let ty = (camY / TS) | 0; ty <= (camY + VH) / TS && ty < MH; ty++)
+    for (let tx = (camX / TS) | 0; tx <= (camX + VW) / TS && tx < MW; tx++)
+      drawTile(MAP[ty][tx], tx * TS - camX, ty * TS - camY, tx, ty, now);
+
+  const bob = Math.sin(now / 250) > 0 ? 1 : 0;
+  for (const it of items) if (!it.got) {
+    const img = ITEM_IMG[it.id];
+    ctx.fillStyle = "rgba(253,230,138,.35)";
+    ctx.beginPath(); ctx.arc(it.tx * TS + 8 - camX, it.ty * TS + 8 - camY, 6 + bob, 0, 7); ctx.fill();
+    ctx.drawImage(img, it.tx * TS + 8 - (img.width >> 1) - camX, it.ty * TS + 8 - (img.height >> 1) - camY - bob);
+  }
+  const near = !dlg && state === "play" && nearNpc();
+  for (const n of NPCS) {
+    ctx.drawImage(n.img, n.tx * TS + 2 - camX, n.ty * TS - camY);
+    if (n === near) {
+      ctx.fillStyle = "#fde68a"; ctx.beginPath(); ctx.arc(n.tx * TS + 8 - camX, n.ty * TS - 6 - camY - bob, 4, 0, 7); ctx.fill();
+      text("A", n.tx * TS + 8 - camX, n.ty * TS - 4 - camY - bob, 6, "#000");
+    }
+  }
+  for (const g of gloomies) drawSprite(GLOOMY, (g.x - camX) | 0, (g.y - camY) | 0, g.dx < 0);
+  if (!(inv > 0 && ((now / 80) | 0) % 2))
+    drawSprite(p.walk && ((p.walk * 6) | 0) % 2 ? RAN_B : RAN_A, (p.x - camX) | 0, (p.y - camY) | 0, p.face < 0);
+  if (tired) { // tetes keringat
+    ctx.fillStyle = "#7dd3fc";
+    const d = ((now / 120) | 0) % 4;
+    ctx.fillRect(p.x - camX - 2, p.y - camY + d, 2, 3); ctx.fillRect(p.x - camX + 12, p.y - camY + 2 + d, 2, 3);
+  }
+
+  // HUD
+  ctx.fillStyle = "rgba(9,9,11,.7)"; ctx.fillRect(0, 0, VW, 12);
+  text("♥".repeat(Math.max(0, hearts)), 4, 9, 8, "#fb7185", "left");
+  ctx.fillStyle = "#3f3f46"; ctx.fillRect(34, 4, 50, 4);
+  ctx.fillStyle = tired || stamina < 0.25 ? "#fb7185" : "#fde68a"; ctx.fillRect(34, 4, 50 * stamina, 4);
+  text(tired ? "CAPEK" : "STAMINA", 88, 9, 6, tired ? "#fb7185" : "#a1a1aa", "left");
+  let ix = VW - 3;
+  for (const it of [...items].reverse()) {
+    ctx.globalAlpha = it.got ? 1 : 0.25;
+    const img = ITEM_IMG[it.id]; ix -= img.width + 3;
+    ctx.drawImage(img, ix, 6 - (img.height >> 1));
+  }
+  ctx.globalAlpha = 1;
+  if (toast) {
+    ctx.fillStyle = "rgba(9,9,11,.75)"; ctx.fillRect(VW / 2 - 55, 16, 110, 12);
+    text(toast.txt, VW / 2, 25, 7, "#fde68a");
+  }
+
+  if (dlg) {
+    ctx.fillStyle = "rgba(9,9,11,.94)"; ctx.fillRect(4, VH - 52, VW - 8, 48);
+    ctx.strokeStyle = "#fda4af"; ctx.lineWidth = 0.5; ctx.strokeRect(4.5, VH - 51.5, VW - 9, 47);
+    text(dlg.name, 9, VH - 42, 7, "#fda4af", "left");
+    ctx.font = `400 7px ${FONT}`;
+    wrap(dlg.lines[dlg.i], VW - 20).slice(0, 4).forEach((l, i) => text(l, 9, VH - 32 + i * 8.5, 7, "#fafafa", "left", 400));
+    if (bob) text("▼", VW - 10, VH - 7, 5, "#fde68a");
+  }
+
+  if (state === "over") screen("GAME OVER", "#fb7185", ["Gloomy menang kali ini...", "Spasi / ketuk untuk ulang"]);
+  if (state === "win") {
+    screen("KONSER SUKSES!", "#fde68a", ["Terima kasih sudah membantu Ranran!", "Spasi / ketuk untuk main lagi"]);
+    drawPhoto(VW / 2 - 35, 32, 70, 80);
+  }
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (state === "play") update(dt);
+  draw(now);
+  requestAnimationFrame(loop);
+}
+
+// Cek sekali: barang/NPC tidak di petak padat dan semuanya (plus panggung) bisa dicapai dari titik awal.
+{
+  const seen = new Set(["4,20"]), q = [[4, 20]];
+  while (q.length) {
+    const [x, y] = q.shift();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const k = x + dx + "," + (y + dy);
+      if (!SOLID.includes(tile(x + dx, y + dy)) && !seen.has(k)) { seen.add(k); q.push([x + dx, y + dy]); }
+    }
+  }
+  for (const o of [...ITEMS_DEF, ...NPCS, { name: "panggung", tx: 38, ty: 3 }])
+    console.assert(seen.has(o.tx + "," + o.ty), "tidak bisa dicapai:", o.name);
+}
+requestAnimationFrame(loop);
+cv.focus();
+</script>
+</body>
+</html>

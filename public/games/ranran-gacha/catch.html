@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ranran Lightstick Catch</title>
+<meta name="description" content="Game tangkap lightstick 2D dengan Ranran (Song Xinran). Mini game fan-made.">
+<style>
+  :root { --bg: #09090b; --line: #ffffff1a; --text: #fafafa; --muted: #a1a1aa; --rose: #fda4af; --amber: #fde68a; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: radial-gradient(ellipse at top, #3f1d2b 0%, var(--bg) 60%) fixed, var(--bg);
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+  .top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .top a { color: var(--muted); }
+  h1 { margin: 12px 0 16px; font-size: clamp(24px, 6vw, 34px); }
+  h1 span { background: linear-gradient(90deg, var(--rose), var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  canvas { display: block; width: 100%; aspect-ratio: 160 / 200; image-rendering: pixelated; border-radius: 12px; border: 1px solid var(--line); background: #000; touch-action: none; }
+  .hint { margin-top: 12px; font-size: 12px; color: var(--muted); text-align: center; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="index.html">← Gacha</a><a href="platformer.html">Super Stage →</a></div>
+  <h1>Ranran <span>Lightstick Catch</span></h1>
+  <canvas id="game" width="160" height="200" tabindex="0" aria-label="Game tangkap. Panah kiri kanan atau geser jari untuk gerak, spasi untuk mulai."></canvas>
+  <p class="hint">← → / A D atau geser jari · Tangkap lightstick 💡 (+1) dan hati 💗 (+3), hindari Gloomy 👾 · Spasi / ketuk untuk mulai</p>
+</main>
+
+<script>
+const VW = 160, VH = 200, FLOOR = 184;
+const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+
+// ---------- Sprite pixel art (1 huruf = 1 piksel), sama dengan Super Stage ----------
+const PAL = {
+  h: "#4a2318", H: "#8a4a32", s: "#ffe2d4", e: "#1c1917", l: "#e11d48", b: "#fda4af",
+  w: "#fafafa", t: "#18181b", k: "#52525b", d: "#18181b", p: "#7c3aed", W: "#ffffff",
+  y: "#fde68a", g: "#a1a1aa", r: "#fb7185",
+};
+function sprite(rows) {
+  const c = document.createElement("canvas");
+  c.width = rows[0].length; c.height = rows.length;
+  const x = c.getContext("2d");
+  rows.forEach((r, j) => [...r].forEach((ch, i) => { if (PAL[ch]) { x.fillStyle = PAL[ch]; x.fillRect(i, j, 1, 1); } }));
+  return c;
+}
+const BODY = [
+  "...hhhhhh...", "..hHHhhhhh..", ".hhhhhhhhhh.", "hhhhhhhhhhhh", "hhsssssssshh", "hhsesssseshh",
+  "hhsbssssbshh", "hhsssllssshh", "hhhwwttwwhhh", "hhwwwttwwwhh", "hswwwttwwwsh", ".swwwttwwws.",
+  "..kkkkkkkk..", "..kkkkkkkk..",
+];
+const RAN_A = sprite([...BODY, "...ss..ss...", "...dd..dd..."]);
+const RAN_B = sprite([...BODY, "..ss....ss..", "..dd....dd.."]);
+const ITEMS = {
+  stick: { pts: 1, img: sprite(["..yy..", ".yWWy.", ".yWWy.", "..yy..", "..gg..", "..gg..", "..gg..", "..gg.."]) },
+  heart: { pts: 3, img: sprite([".rr.rr.", "rrrrrrr", "rWrrrrr", "rrrrrrr", ".rrrrr.", "..rrr..", "...r..."]) },
+  gloomy: { pts: 0, img: sprite([
+    "..pppp..", ".pppppp.", "pWtppWtp", "pppppppp", "ppttttpp", "pppppppp", ".pp..pp.",
+  ]) },
+};
+
+// ---------- State ----------
+let best = 0;
+try { best = +localStorage.getItem("ranran-catch-best") || 0; } catch {}
+let state = "title", px, score, lives, items, spawnT, t, hurtT, pops;
+function reset() {
+  px = VW / 2 - 6; score = 0; lives = 3; items = []; spawnT = 0; t = 0; hurtT = 0; pops = [];
+  state = "play";
+}
+
+// ---------- Input ----------
+const keys = {};
+addEventListener("keydown", e => {
+  keys[e.code] = true;
+  if (["Space", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
+  if (e.code === "Space" && state !== "play") reset();
+});
+addEventListener("keyup", e => { keys[e.code] = false; });
+let pointerX = null;
+const toGame = e => (e.clientX - cv.getBoundingClientRect().left) / cv.clientWidth * VW;
+cv.addEventListener("pointerdown", e => { if (state !== "play") reset(); pointerX = toGame(e); cv.setPointerCapture(e.pointerId); });
+cv.addEventListener("pointermove", e => { if (pointerX !== null) pointerX = toGame(e); });
+cv.addEventListener("pointerup", () => { pointerX = null; });
+
+// ---------- Logic ----------
+const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+function update(dt) {
+  t += dt; hurtT = Math.max(0, hurtT - dt);
+  const speed = 110;
+  if (keys.ArrowLeft || keys.KeyA) px -= speed * dt;
+  if (keys.ArrowRight || keys.KeyD) px += speed * dt;
+  if (pointerX !== null) px += Math.max(-speed * 1.5 * dt, Math.min(speed * 1.5 * dt, pointerX - 6 - px));
+  px = Math.max(0, Math.min(VW - 12, px));
+
+  // Makin lama makin cepat dan makin sering
+  const level = 1 + t / 20;
+  spawnT -= dt;
+  if (spawnT <= 0) {
+    spawnT = 0.9 / level;
+    const r = Math.random();
+    const kind = r < 0.25 * Math.min(level, 2) ? "gloomy" : r > 0.88 ? "heart" : "stick";
+    const img = ITEMS[kind].img;
+    items.push({ kind, x: Math.random() * (VW - img.width), y: -img.height, w: img.width, h: img.height, vy: (40 + Math.random() * 30) * level });
+  }
+
+  const ran = { x: px + 1, y: FLOOR - 14, w: 10, h: 14 };
+  items = items.filter(it => {
+    it.y += it.vy * dt;
+    if (hit(ran, it)) {
+      if (it.kind === "gloomy") {
+        if (hurtT === 0) { lives--; hurtT = 1; }
+      } else {
+        score += ITEMS[it.kind].pts;
+        pops.push({ x: it.x, y: it.y, txt: "+" + ITEMS[it.kind].pts, life: 0.6 });
+      }
+      return false;
+    }
+    return it.y < VH;
+  });
+  pops = pops.filter(p => (p.y -= 20 * dt, (p.life -= dt) > 0));
+
+  if (lives <= 0) {
+    state = "over";
+    if (score > best) { best = score; try { localStorage.setItem("ranran-catch-best", best); } catch {} }
+  }
+}
+
+// ---------- Render ----------
+const STARS = Array.from({ length: 40 }, () => [Math.random() * VW, Math.random() * FLOOR, Math.random()]);
+function text(s, x, y, size = 8, color = "#fafafa") {
+  ctx.font = `bold ${size}px monospace`; ctx.fillStyle = color; ctx.textAlign = "center"; ctx.fillText(s, x, y);
+}
+function draw(now) {
+  const g = ctx.createLinearGradient(0, 0, 0, VH);
+  g.addColorStop(0, "#1e0b16"); g.addColorStop(1, "#3f1d2b");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+  for (const [x, y, p] of STARS) {
+    ctx.fillStyle = `rgba(253,230,138,${0.3 + 0.5 * Math.abs(Math.sin(now / 600 + p * 9))})`;
+    ctx.fillRect(x | 0, y | 0, 1, 1);
+  }
+  // Panggung
+  ctx.fillStyle = "#18181b"; ctx.fillRect(0, FLOOR, VW, VH - FLOOR);
+  ctx.fillStyle = "#fda4af"; ctx.fillRect(0, FLOOR, VW, 1);
+
+  if (state === "title") {
+    ctx.drawImage(RAN_A, VW / 2 - 6, FLOOR - 16);
+    text("RANRAN", VW / 2, 60, 16, "#fda4af");
+    text("LIGHTSTICK CATCH", VW / 2, 76, 8, "#fde68a");
+    text("Spasi / ketuk untuk mulai", VW / 2, 110, 7, "#a1a1aa");
+    if (best) text("Rekor: " + best, VW / 2, 124, 7, "#a1a1aa");
+    return;
+  }
+
+  for (const it of items) ctx.drawImage(ITEMS[it.kind].img, it.x | 0, it.y | 0);
+  const moving = keys.ArrowLeft || keys.ArrowRight || keys.KeyA || keys.KeyD || pointerX !== null;
+  const blink = hurtT > 0 && ((now / 80) | 0) % 2;
+  if (!blink) ctx.drawImage(moving && ((now / 150) | 0) % 2 ? RAN_B : RAN_A, px | 0, FLOOR - 16);
+  for (const p of pops) text(p.txt, p.x + 3, p.y | 0, 7, "#fde68a");
+
+  ctx.textAlign = "left"; ctx.font = "bold 8px monospace"; ctx.fillStyle = "#fafafa";
+  ctx.fillText("Skor " + score, 4, 10);
+  ctx.textAlign = "right"; ctx.fillStyle = "#fb7185";
+  ctx.fillText("♥".repeat(Math.max(0, lives)), VW - 4, 10);
+
+  if (state === "over") {
+    ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(0, 0, VW, VH);
+    text("SELESAI!", VW / 2, 80, 14, "#fda4af");
+    text("Skor: " + score, VW / 2, 98, 8);
+    text("Rekor: " + best, VW / 2, 110, 8, "#fde68a");
+    text("Spasi / ketuk untuk ulang", VW / 2, 132, 7, "#a1a1aa");
+  }
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (state === "play") update(dt);
+  draw(now);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+cv.focus();
+</script>
+</body>
+</html>

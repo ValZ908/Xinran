@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ranran Puzzle Geser</title>
+<meta name="description" content="Susun foto Ranran yang diacak 3×3. Berhasil, kartunya masuk koleksi gacha.">
+<style>
+  :root {
+    --bg: #09090b; --line: #ffffff1a; --text: #fafafa; --muted: #a1a1aa; --rose: #fda4af; --amber: #fde68a;
+    --N: #a1a1aa; --R: #7dd3fc; --SR: #c4b5fd; --SSR: #fcd34d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: radial-gradient(ellipse at top, #3f1d2b 0%, var(--bg) 60%) fixed, var(--bg);
+  }
+  main { max-width: 480px; margin: 0 auto; padding: 24px 16px 48px; }
+  .top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .top a { color: var(--muted); }
+  h1 { margin: 12px 0 0; font-size: clamp(24px, 6vw, 34px); }
+  h1 span { background: linear-gradient(90deg, var(--rose), var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); margin: 6px 0 0; font-size: 14px; }
+
+  .info { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+  .info img { width: 54px; aspect-ratio: 3 / 4; object-fit: cover; object-position: top; border-radius: 8px; border: 2px solid var(--c); }
+  .info b { display: block; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 11px; font-weight: 800; color: #000; background: var(--c); }
+  .moves { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .N { --c: var(--N); } .R { --c: var(--R); } .SR { --c: var(--SR); } .SSR { --c: var(--SSR); }
+
+  .board { position: relative; margin-top: 16px; width: 100%; aspect-ratio: 3 / 4; border-radius: 16px; overflow: hidden; background: #18181b; border: 2px solid var(--c); touch-action: manipulation; }
+  .tile { position: absolute; width: calc(100% / 3); height: calc(100% / 3); padding: 0; border: 1px solid #0006; overflow: hidden; background: #000; transition: transform .15s ease-out; }
+  .tile img { position: absolute; width: 300%; height: 300%; object-fit: cover; object-position: top; pointer-events: none; }
+  .tile:disabled { cursor: default; }
+  .board.won .tile { border-color: transparent; }
+
+  button { font: inherit; cursor: pointer; }
+  .actions { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+  .primary { border: 0; border-radius: 99px; padding: 12px 22px; font-weight: 700; color: #000; background: linear-gradient(90deg, var(--rose), var(--amber)); }
+  .alt { border: 1px solid var(--line); border-radius: 99px; padding: 12px 22px; background: none; color: var(--text); }
+  .win { display: none; margin-top: 16px; padding: 14px; border-radius: 16px; text-align: center; font-weight: 700; color: #000; background: linear-gradient(90deg, var(--rose), var(--amber)); }
+  .win.show { display: block; }
+  .hint { margin-top: 12px; font-size: 12px; color: var(--muted); text-align: center; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+  @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="index.html">← Gacha</a><a href="fanmeet.html">Fan Meeting →</a></div>
+  <h1>Ranran <span>Puzzle Geser</span></h1>
+  <p class="sub">Susun lagi fotonya. Berhasil = kartunya masuk koleksi gacha!</p>
+
+  <div class="info" id="info"></div>
+  <div class="board" id="board" aria-label="Papan puzzle 3 kali 3"></div>
+  <p class="win" id="win" aria-live="polite"></p>
+
+  <div class="actions">
+    <button class="primary" id="next">Foto lain</button>
+    <button class="alt" id="shuffle">Acak ulang</button>
+  </div>
+  <p class="hint">Klik kotak di sebelah ruang kosong, atau pakai tombol panah.</p>
+</main>
+
+<script src="cards.js"></script>
+<script>
+const N = 3, EMPTY = N * N - 1; // kepingan 0..7, 8 = ruang kosong
+const near = (a, b) => Math.abs((a / N | 0) - (b / N | 0)) + Math.abs((a % N) - (b % N)) === 1;
+const solved = (b) => b.every((t, i) => t === i);
+
+// Acak dengan langkah sah dari posisi selesai, jadi puzzle pasti bisa diselesaikan.
+function scramble(steps = 150) {
+  const b = [...Array(N * N).keys()];
+  let empty = EMPTY, prev = -1;
+  for (let i = 0; i < steps || solved(b); i++) {
+    const opts = b.map((_, c) => c).filter((c) => near(c, empty) && c !== prev);
+    const c = opts[Math.floor(Math.random() * opts.length)];
+    [b[empty], b[c]] = [b[c], b[empty]];
+    prev = empty; empty = c;
+  }
+  return b;
+}
+console.assert(solved([0, 1, 2, 3, 4, 5, 6, 7, 8]) && !solved([1, 0, 2, 3, 4, 5, 6, 7, 8]), "solved salah");
+console.assert(near(0, 1) && near(0, 3) && !near(2, 3) && !near(0, 4), "near salah");
+console.assert(scramble().slice().sort((a, b) => a - b).join() === "0,1,2,3,4,5,6,7,8", "scramble rusak");
+
+const $ = (id) => document.getElementById(id);
+let card, board, moves, won, tiles;
+
+function load() {
+  try { return { owned: {}, pulls: 0, sinceSSR: 0, ...JSON.parse(localStorage.getItem(KEY)) }; }
+  catch { return { owned: {}, pulls: 0, sinceSSR: 0 }; }
+}
+
+function start(newCard) {
+  if (newCard) {
+    // Utamakan kartu yang belum dimiliki supaya puzzle terasa berguna.
+    const owned = load().owned;
+    const pool = CARDS.filter((c) => !owned[c.id] && c !== card);
+    const list = pool.length ? pool : CARDS.filter((c) => c !== card);
+    card = list[Math.floor(Math.random() * list.length)];
+  }
+  board = scramble(); moves = 0; won = false;
+  $("board").className = `board ${card.r}`;
+  $("win").classList.remove("show");
+  $("info").className = `info ${card.r}`;
+  $("info").innerHTML = `<img src="${card.src}" alt="Contoh foto ${card.name}">
+    <div><b>${card.name}</b><span class="tag">${card.r}</span></div><span class="moves" id="moves"></span>`;
+  tiles = board.map((_, t) => {
+    const b = document.createElement("button");
+    b.className = "tile";
+    b.setAttribute("aria-label", `Keping ${t + 1}`);
+    b.innerHTML = `<img src="${card.src}" alt="" style="left:${-(t % N) * 100}%;top:${-(t / N | 0) * 100}%">`;
+    b.onclick = () => move(board.indexOf(t));
+    return b;
+  });
+  $("board").replaceChildren(...tiles);
+  draw();
+}
+
+function draw() {
+  board.forEach((t, cell) => {
+    tiles[t].style.transform = `translate(${(cell % N) * 100}%, ${(cell / N | 0) * 100}%)`;
+    tiles[t].hidden = t === EMPTY && !won;
+    tiles[t].disabled = won;
+  });
+  $("moves").textContent = `${moves} langkah`;
+}
+
+function move(cell) {
+  const empty = board.indexOf(EMPTY);
+  if (won || !near(cell, empty)) return;
+  [board[empty], board[cell]] = [board[cell], board[empty]];
+  moves++;
+  if (solved(board)) win();
+  draw();
+}
+
+function win() {
+  won = true;
+  $("board").classList.add("won");
+  const s = load();
+  const isNew = !s.owned[card.id];
+  s.owned[card.id] = (s.owned[card.id] || 0) + 1;
+  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {}
+  $("win").textContent = `🎉 Selesai dalam ${moves} langkah! Kartu ${card.r} “${card.name}” ${isNew ? "masuk koleksimu (NEW)" : "bertambah di koleksimu"}.`;
+  $("win").classList.add("show");
+}
+
+// Panah = geser keping ke arah itu, masuk ke ruang kosong.
+document.addEventListener("keydown", (e) => {
+  const off = { ArrowLeft: [0, 1], ArrowRight: [0, -1], ArrowUp: [1, 0], ArrowDown: [-1, 0] }[e.key];
+  if (!off) return;
+  e.preventDefault();
+  const empty = board.indexOf(EMPTY);
+  const r = (empty / N | 0) + off[0], c = (empty % N) + off[1];
+  if (r >= 0 && r < N && c >= 0 && c < N) move(r * N + c);
+});
+
+$("next").onclick = () => start(true);
+$("shuffle").onclick = () => start(false);
+start(true);
+</script>
+</body>
+</html>
